@@ -1,22 +1,15 @@
 #include <ESP8266WiFi.h>
 #include "Adafruit_IO_Client.h"
 
-// WiFi access point details
-#define WLAN_SSID  "...your SSID..."
-#define WLAN_PASS  "...your password..."
-
-// Adafruit IO access details
-#define AIO_KEY    "...your Adafruit IO key value ..."
-
 WiFiClient client;
 Adafruit_IO_Client aio = Adafruit_IO_Client(client, AIO_KEY);
 
-Adafruit_IO_Feed testFeed = aio.getFeed("esptestfeed");
-
-unsigned int count = 0;
+Adafruit_IO_Feed systemStatusFeed = aio.getFeed("toggle_air_system_button_feed");
+Adafruit_IO_Feed requestedTemperatureFeed = aio.getFeed("requested_temperature_feed");
+Adafruit_IO_Feed actualTemperatureFeed = aio.getFeed("actual_temperature_feed");
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(115200); // TODO: extract baud rate in macro
   delay(10);
   Serial.println(); Serial.println();
   Serial.println(F("Adafruit IO ESP8266 test!"));
@@ -38,6 +31,8 @@ void setup() {
   aio.begin();
 
   Serial.println(F("Ready!"));
+
+  // TODO: Register with Arduino as local and remote
 }
 
 void loop() {
