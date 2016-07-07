@@ -32,7 +32,37 @@ void setup() {
 
   Serial.println(F("Ready!"));
 
-  // TODO: Register with Arduino as local and remote
+  registerWithMasterLocal();
+  registerWithMasterRemote();
+}
+
+void registerWithMasterLocal() {
+  registerWithMasterGeneric(LOCAL_ESP_8266_ID, LOCAL_MASTER_ID);
+}
+
+void registerWithMasterRemote() {
+  registerWithMasterGeneric(REMOTE_ESP_8266_ID, REMOTE_MASTER_ID);
+}
+
+void registerWithMasterGeneric(int deviceId, int masterId) {
+  String registerRequestMessage = generateMessage(REGISTER, deviceId, masterId);
+  Serial.print(registerRequestMessage);
+
+  // Wait for response by Master
+  while(!Serial.available()) {
+    delay(5);
+    // TODO: fail if communication is not established within reasonable time frame
+  }
+
+  // TODO: Read and handle message
+
+  // Three-way handshake - acknowlegde reponse by Master
+  String confrimMessage = generateMessage(CONFIRM, deviceId, masterId);
+  Serial.print(confrimMessage);
+}
+
+String generateMessage(int messageType, int sender, int receiver, char[] data) {
+  
 }
 
 void loop() {
