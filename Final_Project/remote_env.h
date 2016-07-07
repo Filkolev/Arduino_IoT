@@ -1,0 +1,3 @@
+// Device IDs
+#define REMOTE_MASTER_ID 2000
+#define REMOTE_ESP_8266_ID 2001
