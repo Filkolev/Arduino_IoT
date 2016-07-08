@@ -6,3 +6,6 @@
 #define DHTPIN 10 
 #define DHTTYPE DHT22
 #define IR_PIN 11
+
+// Timeouts
+#define MESSAGE_CHECK_TIMEOUT 2000

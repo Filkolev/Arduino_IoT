@@ -233,6 +233,7 @@ void readMessage(
     Serial.println(outgoingMessageBuffer);
     return;
   } else if (messageType == READING) {
+    // TODO: allow other devices to register
     switch (incommingMessageBuffer[incommingBufferFilled]) {
       case 'T':
         // update real temperature
