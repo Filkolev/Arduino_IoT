@@ -1,0 +1,3 @@
+// Device IDs
+#define LOCAL_MASTER_ID 1000
+#define LOCAL_ESP_8266_ID 1001
