@@ -49,11 +49,13 @@ void loop() {
     Serial.println(results.value, HEX);
     irrecv.resume(); // Receive the next value
   }
-  
+
+  handleMessages();
   // Control motor, LEDs and buzzer
   
 }
 
+// Allows no other messages in the meantime...
 bool awaitConfirmation(int expectedReceiver, int expectedSender) {
   char startSumbol = Serial.read();
   int messageType = (int)Serial.read();
