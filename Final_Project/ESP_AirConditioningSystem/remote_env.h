@@ -9,7 +9,6 @@
 #define LED_2 6
 #define LED_3 7
 #define LED_4 8
-#define BUZZER 9
 
 // Motor
 #define MOTOR 12
@@ -18,3 +17,14 @@
 #define DHTPIN 10 
 #define DHTTYPE DHT22
 #define IR_PIN 11
+
+
+// Remote
+#define UP 551485695
+#define DOWN 551518335
+#define IR_TIMEOUT 50
+
+// Buzzer
+#define BUZZ_FREQUENCY 10000
+#define BUZZ_DURATION 200
+#define BUZZER 9

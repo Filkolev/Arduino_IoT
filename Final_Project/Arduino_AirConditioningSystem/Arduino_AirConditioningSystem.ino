@@ -1,5 +1,6 @@
 #include "DHT.h"
 #include <IRremote.h>
+#include <SoftwareSerial.h>
 
 #include "common_env.h"
 #include "local_env.h"
@@ -7,16 +8,18 @@
 
 DHT dht(DHTPIN, DHTTYPE);
 IRrecv irrecv(IR_PIN);
+SoftwareSerial espSerial(RX, TX); // RX, TX
 decode_results results;
 
 int actualTemperatureMeasured;
+long currentMillis;
+long previousReading = 0;
 
 int requestedTemperatureMeasured = REQ_TEMPERATURE_DEFAULT;
 int requestedTemperatureReceived = REQ_TEMPERATURE_DEFAULT;
 
 bool isSystemOn = false;
 
-int incommingBufferFilled = 0;
 char incommingMessageBuffer[MSG_BUFFER_LEN] = {0};
 char outgoingMessageBuffer[MSG_BUFFER_LEN] = {0};
 
@@ -28,9 +31,19 @@ char connectedDevicesRemote[MAX_CONNECTED_DEVICES] = {0};
 int leds[5] = { LED_0, LED_1, LED_2, LED_3, LED_4 };
 
 void setup() {
-  // TODO: Setup serial communication
+  Serial.begin(BAUD_RATE);
+  espSerial.begin(BAUD_RATE);
   dht.begin();
   irrecv.enableIRIn(); // Start the IR receiver
+
+  pinMode(ON_LED, OUTPUT);
+
+  for (int i = 0; i < sizeof(leds); i++) {
+    pinMode(leds[i], OUTPUT);
+  }
+
+  pinMode(BUZZER, OUTPUT);
+  pinMode(MOTOR, OUTPUT);
 }
 
 void loop() {
@@ -38,9 +51,11 @@ void loop() {
   // Read messages, handle them
   handleMessages();
 
-  // read DHT, TODO: send to ESP
+  // read DHT
   int t = (int)dht.readTemperature();
-
+  generateMessage(READING, LOCAL_MASTER_ID, LOCAL_ESP_8266_ID, ("T" + String(t)).c_str());
+  espSerial.write(outgoingMessageBuffer);
+  
   // Remote
   // Read messages, handle them
   handleMessages();
@@ -48,23 +63,37 @@ void loop() {
   if (isSystemOn) {
     // turn green LED on
     digitalWrite(ON_LED, HIGH);
+
+    // Read IR
+    currentMillis = millis();
+    if (currentMillis - previousReading >= IR_TIMEOUT) {
+      previousReading = currentMillis;
+
+      if (irrecv.decode(&results)) {
+        if (results.value == 551485695) {
+          requestedTemperatureMeasured++;
+        } else if (results.value == 551518335) {
+          requestedTemperatureMeasured--;
+        }
+
+        if (requestedTemperatureMeasured < REQ_TEMPERATURE_MIN) {
+          //tone(BUZZER, BUZZ_FREQUENCY, BUZZ_DURATION);
+          requestedTemperatureMeasured = REQ_TEMPERATURE_MIN;
+        } else if (requestedTemperatureMeasured > REQ_TEMPERATURE_MAX) {
+          //tone(BUZZER, BUZZ_FREQUENCY, BUZZ_DURATION);
+          requestedTemperatureMeasured = REQ_TEMPERATURE_MAX;
+        }
+
+        generateMessage(READING, REMOTE_MASTER_ID, REMOTE_ESP_8266_ID, ("R" + String(requestedTemperatureMeasured)).c_str());
+        espSerial.write(outgoingMessageBuffer);
+        
+        delay(IR_TIMEOUT);
+        irrecv.resume(); // Receive the next value
+      }
+    }
     
-    // Read IR, TODO: send to ESP
-    if (irrecv.decode(&results)) {
-      // Serial.println(results.value);
-      irrecv.resume(); // Receive the next value
-    }
-
-    if (requestedTemperatureMeasured < REQ_TEMPERATURE_MIN) {
-      // Sound buzzer
-      requestedTemperatureMeasured = REQ_TEMPERATURE_MIN;
-    } else if (requestedTemperatureMeasured > REQ_TEMPERATURE_MAX) {
-      // Sound buzzer
-      requestedTemperatureMeasured = REQ_TEMPERATURE_MAX;
-    }
-
     // turn LEDs on
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < sizeof(leds); i++) {
       if ((requestedTemperatureMeasured >> i) && 1) {
         digitalWrite(leds[i], HIGH);
       } else {
@@ -73,25 +102,33 @@ void loop() {
     }
 
     handleMessages();
-    
+
     if (requestedTemperatureReceived < actualTemperatureMeasured) {
-      // turn motor on
-    }    
+      digitalWrite(MOTOR, HIGH);
+    } else {
+      digitalWrite(MOTOR, LOW);
+    }
+  } else {
+    digitalWrite(ON_LED, LOW);
+
+    for (int i = 0; i < sizeof(leds); i++) {
+      digitalWrite(leds[i], LOW);
+    }
   }
 }
 
 // Allows no other messages in the meantime...
 bool awaitConfirmation(int expectedReceiver, int expectedSender) {
-  while (!Serial.available()) {
+  while (!espSerial.available()) {
     delay(50);
   }
-  
-  char startSymbol = Serial.read();
-  int messageType = (int)Serial.read();
-  int sender = (int)Serial.read();
-  int receiver = (int)Serial.read();
-  int dataLength = (int)Serial.read();
-  char endSymbol = Serial.read();
+
+  char startSymbol = espSerial.read();
+  int messageType = (int)espSerial.read();
+  int sender = (int)espSerial.read();
+  int receiver = (int)espSerial.read();
+  int dataLength = (int)espSerial.read();
+  char endSymbol = espSerial.read();
 
   // All message attributes must be correct
   if (startSymbol != START_SYMBOL ||
@@ -139,37 +176,34 @@ void readMessage(
   int receiver,
   int dataLength,
   bool isLocal) {
-  // Forward to receiver or Master if receiver is unknown
   if (receiver != LOCAL_ESP_8266_ID && receiver != REMOTE_ESP_8266_ID) {
-    generateMessage(messageType, sender, receiver, "");
-    Serial.println(outgoingMessageBuffer);
+    // Forward
     return;
   }
 
-  bool isValidSender = checkSender(sender, isLocal);
-
   // only talk to your friends
+  bool isValidSender = checkSender(sender, isLocal);
   if (!isValidSender) {
     return;
   }
 
   if (messageType == INFO) {
-    // Forward to Master for printing
-    generateMessage(messageType, sender, receiver, "");
-    Serial.println(outgoingMessageBuffer);
+    Serial.println(incommingMessageBuffer);
     return;
   } else if (messageType == READING) {
-    // TODO: allow other devices to register
     switch (incommingMessageBuffer[0]) {
-      case 'T':
-        // TODO
-        break;
       case 'R':
-        // TODO
+        requestedTemperatureReceived = (int)incommingMessageBuffer[1];
+        break;
+      case 'S':
+        isSystemOn = incommingMessageBuffer[1] == '1';
         break;
     }
+  } else if (messageType == REGISTER) {
+    generateMessage(CONFIRM, receiver, sender, "");
+    awaitConfirmation(receiver, sender);
   } else {
-    // disregard commands, registers or unknown types
+    // disregard commands or unknown types
   }
 }
 
@@ -177,8 +211,8 @@ void handleMessages(void) {
   // Disregard all symbols until start symbol is received
   bool isMessageStarted = false;
 
-  while (Serial.available()) {
-    char symbolRead = Serial.read();
+  while (espSerial.available()) {
+    char symbolRead = espSerial.read();
 
     if (!isMessageStarted && symbolRead == START_SYMBOL) {
       isMessageStarted = true;
@@ -186,15 +220,15 @@ void handleMessages(void) {
       continue;
     }
 
-    int messageType = (int)Serial.read();
-    int sender = (int)Serial.read();
-    int receiver = (int)Serial.read();
-    int dataLength = (int)Serial.read();
+    int messageType = (int)espSerial.read();
+    int sender = (int)espSerial.read();
+    int receiver = (int)espSerial.read();
+    int dataLength = (int)espSerial.read();
 
     fillIncommingBuffer(dataLength);
 
     // TODO: check valid message format in advance
-    char endSymbol = Serial.read();
+    char endSymbol = espSerial.read();
     isMessageStarted = false;
 
     readMessage(messageType, sender, receiver, dataLength, true);
@@ -212,11 +246,9 @@ void fillIncommingBuffer(int dataLength) {
   // TODO: check valid length
   // Fill buffer
   for (i = 0; i < dataLength; i++) {
-    incommingMessageBuffer[i] = Serial.read();
+    incommingMessageBuffer[i] = espSerial.read();
   }
 }
-
-// void generateMessage(int messageType, int sender, int receiver, const char* data);
 
 bool checkSender(int sender, bool isLocal) {
   int connectedDevicesCount = isLocal ? connectedDevCountLocal : connectedDevCountRemote;

@@ -137,13 +137,11 @@ void loop() {
   if (systemState.isValid()) {
     char *state = systemState;
     isSystemOn = String(state).equals("ON");
-    Serial.println(isSystemOn);
+    generateMessage(READING, REMOTE_ESP_8266_ID, REMOTE_MASTER_ID, ("S" + String(isSystemOn)).c_str());
   }
 
   handleMessages();
-
-  Serial.println(actualTemperatureMeasured);
-
+  
   // upload real temperature to adafruit
   actualTemperatureFeed.send(actualTemperatureMeasured);
 
@@ -159,7 +157,8 @@ void loop() {
     FeedData requestedTemperatureData = requestedTemperatureFeed.receive();
     if (requestedTemperatureData.isValid()) {
       requestedTemperatureData.intValue(&requestedTemperatureReceived);
-      Serial.println(requestedTemperatureReceived); // Send to arduino
+      generateMessage(READING, LOCAL_ESP_8266_ID, LOCAL_MASTER_ID, ("R" + String(requestedTemperatureReceived)).c_str());
+      Serial.println(outgoingMessageBuffer); // Send to arduino
     }
   }
 }
@@ -178,8 +177,6 @@ void fillIncommingBuffer(int dataLength) {
   }
 }
 
-// void generateMessage(int messageType, int sender, int receiver, const char* data);
-
 void readMessage(
   int messageType,
   int sender,
@@ -188,25 +185,23 @@ void readMessage(
   bool isLocal) {
   // Forward to receiver or Master if receiver is unknown
   if (receiver != LOCAL_ESP_8266_ID && receiver != REMOTE_ESP_8266_ID) {
-    generateMessage(messageType, sender, receiver, "");
+    generateMessage(messageType, sender, receiver, incommingMessageBuffer);
     Serial.println(outgoingMessageBuffer);
     return;
   }
 
-  bool isValidSender = checkSender(sender, isLocal);
-
   // only talk to your friends
+  bool isValidSender = checkSender(sender, isLocal); 
   if (!isValidSender) {
     return;
   }
 
   if (messageType == INFO) {
     // Forward to Master for printing
-    generateMessage(messageType, sender, receiver, "");
+    generateMessage(messageType, sender, receiver, incommingMessageBuffer);
     Serial.println(outgoingMessageBuffer);
     return;
-  } else if (messageType == READING) {
-    // TODO: allow other devices to register
+  } else if (messageType == READING) {    
     switch (incommingMessageBuffer[0]) {
       case 'T':
         actualTemperatureMeasured = (int)incommingMessageBuffer[1];         
@@ -217,8 +212,11 @@ void readMessage(
         requestedTemperatureMeasured = (int)incommingMessageBuffer[1];        
         break;
     }
+  } else if (messageType == REGISTER) {
+    generateMessage(CONFIRM, receiver, sender, "");
+    awaitConfirmation(receiver, sender);
   } else {
-    // disregard commands, registers or unknown types
+    // disregard commands or unknown types
   }
 }
 
