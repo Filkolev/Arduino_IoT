@@ -14,14 +14,12 @@ Adafruit_IO_Feed requestedTemperatureFeed = aio.getFeed("requested_temperature_f
 Adafruit_IO_Feed actualTemperatureFeed = aio.getFeed("actual_temperature_feed");
 
 int actualTemperatureMeasured;
-int actualTemperatureReceived;
 
 int requestedTemperatureMeasured = REQ_TEMPERATURE_DEFAULT;
 int requestedTemperatureReceived = REQ_TEMPERATURE_DEFAULT;
 
 bool isSystemOn = false;
 
-int incommingBufferFilled = 0;
 char incommingMessageBuffer[MSG_BUFFER_LEN] = {0};
 char outgoingMessageBuffer[MSG_BUFFER_LEN] = {0};
 
@@ -45,11 +43,11 @@ void setup() {
 }
 
 void registerWithMasterLocal(void) {
-  registerWithDevice(LOCAL_ESP_8266_ID, LOCAL_MASTER_ID);
+  registerWithDevice(LOCAL_ESP_8266_ID, LOCAL_MASTER_ID, true);
 }
 
 void registerWithMasterRemote(void) {
-  registerWithDevice(REMOTE_ESP_8266_ID, REMOTE_MASTER_ID);
+  registerWithDevice(REMOTE_ESP_8266_ID, REMOTE_MASTER_ID, false);
 }
 
 // bool local only needed because system simulates local and remote setups
@@ -68,7 +66,6 @@ void registerWithDevice(int deviceId, int other, bool local) {
   // Wait for response; disregard wrong responses for now
   awaitConfirmation(deviceId, other);
 
-
   // Three-way handshake - acknowlegde reponse by Master
   generateMessage(CONFIRM, deviceId, other, "");
   Serial.println(outgoingMessageBuffer);
@@ -81,7 +78,11 @@ void registerWithDevice(int deviceId, int other, bool local) {
 }
 
 bool awaitConfirmation(int expectedReceiver, int expectedSender) {
-  char startSumbol = Serial.read();
+  while (!Serial.available()) {
+    delay(50);
+  }
+  
+  char startSymbol = Serial.read();
   int messageType = (int)Serial.read();
   int sender = (int)Serial.read();
   int receiver = (int)Serial.read();
@@ -158,36 +159,8 @@ void loop() {
     FeedData requestedTemperatureData = requestedTemperatureFeed.receive();
     if (requestedTemperatureData.isValid()) {
       requestedTemperatureData.intValue(&requestedTemperatureReceived);
-      Serial.println(requestedTemperatureReceived);
+      Serial.println(requestedTemperatureReceived); // Send to arduino
     }
-  }
-}
-
-void handleMessages(void) {
-  // Disregard all symbols until start symbol is received
-  bool isMessageStarted = false;
-
-  while (Serial.available()) {
-    char symbolRead = Serial.read();
-
-    if (!isMessageStarted && symbolRead == START_SYMBOL) {
-      isMessageStarted = true;
-    } else if (symbolRead != START_SYMBOL) {
-      continue;
-    }
-
-    int messageType = (int)Serial.read();
-    int sender = (int)Serial.read();
-    int receiver = (int)Serial.read();
-    int dataLength = (int)Serial.read();
-
-    fillIncommingBuffer(dataLength);
-
-    // TODO: check valid message format in advance
-    char endSymbol = Serial.read();
-
-    readMessage(messageType, sender, receiver, dataLength, true);
-    readMessage(messageType, sender, receiver, dataLength, false);
   }
 }
 
@@ -234,27 +207,57 @@ void readMessage(
     return;
   } else if (messageType == READING) {
     // TODO: allow other devices to register
-    switch (incommingMessageBuffer[incommingBufferFilled]) {
+    switch (incommingMessageBuffer[0]) {
       case 'T':
-        // update real temperature
+        actualTemperatureMeasured = (int)incommingMessageBuffer[1];         
+        actualTemperatureFeed.send(actualTemperatureMeasured);
         break;
       case 'R':
         // update requested temperature
+        requestedTemperatureMeasured = (int)incommingMessageBuffer[1];        
         break;
-      default:
-        // disregard
     }
   } else {
     // disregard commands, registers or unknown types
   }
 }
 
+
+void handleMessages(void) {
+  // Disregard all symbols until start symbol is received
+  bool isMessageStarted = false;
+
+  while (Serial.available()) {
+    char symbolRead = Serial.read();
+
+    if (!isMessageStarted && symbolRead == START_SYMBOL) {
+      isMessageStarted = true;
+    } else if (symbolRead != START_SYMBOL) {
+      continue;
+    }
+
+    int messageType = (int)Serial.read();
+    int sender = (int)Serial.read();
+    int receiver = (int)Serial.read();
+    int dataLength = (int)Serial.read();
+
+    fillIncommingBuffer(dataLength);
+
+    // TODO: check valid message format in advance
+    char endSymbol = Serial.read();
+    isMessageStarted = false;
+
+    readMessage(messageType, sender, receiver, dataLength, true);
+    readMessage(messageType, sender, receiver, dataLength, false);
+  }
+}
+
 bool checkSender(int sender, bool isLocal) {
   int connectedDevicesCount = isLocal ? connectedDevCountLocal : connectedDevCountRemote;
-  char devices[] = isLocal ? connectedDevicesLocal : connectedDevicesRemote;
 
   for (int i = 0; i < connectedDevicesCount; i++) {
-    if (devices[i] == sender) {
+    if ((isLocal && connectedDevicesLocal[i] == sender)
+        || (!isLocal && connectedDevicesRemote[i] == sender)) {
       return true;
     }
   }

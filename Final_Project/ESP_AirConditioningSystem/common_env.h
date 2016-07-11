@@ -24,3 +24,7 @@
 #define MAX_DATA_LEN 25
 #define START_SYMBOL '%'
 #define END_SYMBOL '%'
+
+// Serial communication
+#define TX 2
+#define RX 3
