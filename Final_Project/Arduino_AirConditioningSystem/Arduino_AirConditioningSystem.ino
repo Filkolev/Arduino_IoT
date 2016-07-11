@@ -70,9 +70,9 @@ void loop() {
       previousReading = currentMillis;
 
       if (irrecv.decode(&results)) {
-        if (results.value == 551485695) {
+        if (results.value == UP) {
           requestedTemperatureMeasured++;
-        } else if (results.value == 551518335) {
+        } else if (results.value == DOWN) {
           requestedTemperatureMeasured--;
         }
 
