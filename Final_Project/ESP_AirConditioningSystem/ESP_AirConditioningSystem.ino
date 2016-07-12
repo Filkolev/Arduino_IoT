@@ -32,20 +32,22 @@ void setup() {
 }
 
 void loop() {
-  isSystemOn = true;
-  Serial.println("S" + String(isSystemOn ? 1 : 0));
   handleMessages();
 
   // read system on/off state from adafruit
-  //  FeedData systemState = systemStatusFeed.receive();
-  //  if (systemState.isValid()) {
-  //    char *state = systemState;
-  //    isSystemOn = String(state).equals("ON");
-  //    Serial.print("S" + String(isSystemOn));
-  //  }
+  FeedData systemState = systemStatusFeed.receive();
+  if (systemState.isValid()) {
+    char *state = systemState;
+    isSystemOn = String(state).equals("ON");
 
-
-
+    
+      Serial.print('S');
+      Serial.println(isSystemOn ? '1' : '0');
+      
+      
+    
+  }
+  
   handleMessages();
 
   // upload real temperature to adafruit
@@ -61,27 +63,30 @@ void loop() {
     handleMessages();
 
     // FeedData requestedTemperatureData = requestedTemperatureFeed.receive();
-//    if (requestedTemperatureData.isValid()) {
-//      requestedTemperatureData.intValue(&requestedTemperatureReceived);
-//      Serial.print("R" + String((char)requestedTemperatureReceived));
-//    }
+    //    if (requestedTemperatureData.isValid()) {
+    //      requestedTemperatureData.intValue(&requestedTemperatureReceived);
+    //      Serial.print("R" + String((char)requestedTemperatureReceived));
+    //    }
 
-    Serial.println("R" + String((char)requestedTemperatureReceived));
+    Serial.print('R');
+    Serial.println((char)requestedTemperatureReceived);
   }
 }
 
 void handleMessages(void) {
   while (Serial.available()) {
-    char symbolRead = Serial.read();
+    String msg = "";
+    msg += (char)Serial.read();
+    msg += (char)Serial.read();
 
-    switch (symbolRead) {
+    switch (msg[0]) {
       case 'T':
-        actualTemperatureMeasured = (int)Serial.read();
+        actualTemperatureMeasured = (int)msg[1];
         //actualTemperatureFeed.send(actualTemperatureMeasured);
         break;
       case 'R':
         // update requested temperature
-        requestedTemperatureMeasured = (int)Serial.read();
+        requestedTemperatureMeasured = (int)msg[1];
         //requestedTemperatureFeed.send(requestedTemperatureMeasured);
         requestedTemperatureReceived = requestedTemperatureMeasured;
         break;

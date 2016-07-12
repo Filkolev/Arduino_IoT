@@ -1,6 +1,6 @@
 // WiFi access point details
-#define WLAN_SSID "Fil"
-#define WLAN_PASS "filkolev"
+#define WLAN_SSID "SoftUni"
+#define WLAN_PASS ""
 
 // Adafruit IO access details
 #define AIO_KEY "4c48fa6fbd0d471f99ed1fa786500128"

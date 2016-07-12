@@ -44,15 +44,22 @@ void loop() {
   // Local
   // Read messages, handle them
   handleMessages();
-  
+
 
   // read DHT
-  actualTemperatureMeasured = (int)dht.readTemperature();
-  msg = "T" + String((char)actualTemperatureMeasured);
-  espSerial.write(msg.c_str());
+  currentMillis = millis();
+  if (currentMillis - previousReading > 2000) {
+    previousReading = currentMillis;
+    actualTemperatureMeasured = (int)dht.readTemperature();
+    delay(50);
+    Serial.print('T');
+    Serial.println(actualTemperatureMeasured);
 
-  //Serial.print("requested: "); Serial.println(requestedTemperatureReceived);
-  //Serial.print("actual: "); Serial.println(actualTemperatureMeasured);
+    espSerial.print('T');
+    espSerial.println((char)actualTemperatureMeasured);
+    
+  }
+
 
   // Remote
   // Read messages, handle them
@@ -88,8 +95,9 @@ void loop() {
           requestedTemperatureMeasured = REQ_TEMPERATURE_MAX;
         }
 
-        msg = "R" + String((char)requestedTemperatureMeasured);
-        espSerial.write(msg.c_str());
+        espSerial.print('R');
+        espSerial.println((char)requestedTemperatureMeasured);
+        
 
         delay(IR_TIMEOUT);
         irrecv.resume(); // Receive the next value
@@ -106,14 +114,13 @@ void loop() {
     }
 
     handleMessages();
+
     if (requestedTemperatureReceived < actualTemperatureMeasured) {
       // digitalWrite(MOTOR, HIGH);
       digitalWrite(BUZZER, HIGH);
-
     } else {
       // digitalWrite(MOTOR, LOW);
       digitalWrite(BUZZER, LOW);
-
     }
   } else {
     digitalWrite(ON_LED, LOW);
@@ -127,19 +134,22 @@ void loop() {
 
 void handleMessages(void) {
   if (espSerial.available()) {
-    char symbolRead = espSerial.read();
-    Serial.print(symbolRead);
-    
-    switch (symbolRead) {
+    String msg = "";
+    msg += (char)espSerial.read();
+    msg += (char)espSerial.read();
+
+    Serial.print(msg[0]);
+
+    switch (msg[0]) {
       case 'R':
-        requestedTemperatureReceived = (int)espSerial.read();
+        requestedTemperatureReceived = (int)msg[1];
         Serial.println(requestedTemperatureReceived);
         break;
       case 'S':
-        isSystemOn = espSerial.read() == '1';
+        isSystemOn = msg[1] == '1';
         Serial.println(isSystemOn);
         break;
     }
-    delay(200);
+    
   }
 }
